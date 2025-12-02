@@ -114,8 +114,49 @@ class GPT(nn.Module):
         loss = None
         if targets is not None:
             loss = f.cross_entropy(logits.view(-1,logits.shape[-1]),targets.view(-1))
-        return logits,loss
-    
+        return logits,loss  
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens=50, temperature=0.8, top_k=None, do_sample=False, eos_token_id=None):
+        self.eval()
+
+        B, T = idx.shape
+        device = idx.device
+        context_len = self.config.context_length
+
+        if T > context_len:
+            idx = idx[:, -context_len:]
+            T = idx.shape[1]
+
+        generated = idx.clone()
+
+        for _ in range(max_new_tokens):
+            input_ids = generated[:, -context_len:]
+
+            logits, _ = self.forward(input_ids, targets=None) 
+            next_logits = logits[:, -1, :] 
+
+            if temperature != 1.0 and temperature > 0.0:
+                next_logits = next_logits / temperature
+
+            if do_sample:
+                if top_k is not None and top_k > 0:
+                    vals, idxs = next_logits.topk(top_k, dim=-1)
+                    min_vals = vals[:, -1].unsqueeze(-1) 
+                    mask = next_logits < min_vals
+                    next_logits = next_logits.masked_fill(mask, float('-inf'))
+
+                probs = torch.softmax(next_logits, dim=-1) 
+                next_token = torch.multinomial(probs, num_samples=1)  
+            else:
+                next_token = torch.argmax(next_logits, dim=-1, keepdim=True) 
+
+            generated = torch.cat([generated, next_token], dim=1)  
+
+            if eos_token_id is not None:
+                if (generated == eos_token_id).any(dim=1).all():
+                    break
+
+        return generated
     def configure_optimizer(self,weight_decay,lr,device_type,master_process):
         param_dict = {pn:p for pn, p in self.named_parameters() if p.requires_grad}
 

@@ -1,2 +1,4 @@
 dataset/
 data/
+story_download/
+*.pt
