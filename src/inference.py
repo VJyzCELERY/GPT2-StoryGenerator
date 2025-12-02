@@ -117,7 +117,7 @@ class GPTInfer:
 
     def print_stream(self, prompt, max_tokens=200,seed=42,longer_story=True, temperature=0.8, end_prob=0.1):
         text = prompt
-        print(prompt,end=" ", flush=True)
+        print(prompt,end="", flush=True)
         for piece in self.generate_sequences(prompt, max_tokens=max_tokens,seed=seed,longer_story=longer_story,temperature=temperature,end_prob=end_prob):
             text += piece
             print(piece, end="", flush=True)
