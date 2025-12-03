@@ -9,7 +9,6 @@ from sacrebleu import corpus_bleu
 from rouge_score import rouge_scorer
 import numpy as np
 import math
-from collections import Counter
 
 torch.set_float32_matmul_precision('high')
 
@@ -27,21 +26,6 @@ def distinct_n(text, n=1):
     
     ngrams = [tuple(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
     return len(set(ngrams)) / len(ngrams)
-
-
-def evaluate_repetition(generated_texts):
-    rep_scores = []
-    d1_scores = []
-    d2_scores = []
-
-    for txt in generated_texts:
-        rep_scores.append(repetition_rate(txt, n=3))
-        d1_scores.append(distinct_n(txt, n=1))
-        d2_scores.append(distinct_n(txt, n=2))
-
-    print(f"Repetition (3-gram): {sum(rep_scores)/len(rep_scores):.4f}")
-    print(f"Distinct-1: {sum(d1_scores)/len(d1_scores):.4f}")
-    print(f"Distinct-2: {sum(d2_scores)/len(d2_scores):.4f}")
 
 
 def compute_self_bleu(generated_texts):
