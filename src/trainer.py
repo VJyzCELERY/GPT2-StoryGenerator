@@ -17,7 +17,7 @@ def repetition_rate(text, n=3):
     if len(tokens) < n:
         return 0.0
     ngrams = [tuple(tokens[i:i+n]) for i in range(len(tokens)-n+1)]
-    return 1 - (len(set(ngrams)) / len(ngrams))
+    return (len(ngrams) - len(set(ngrams))) / len(ngrams)
 
 def distinct_n(text, n=1):
     tokens = text.split()
@@ -57,6 +57,7 @@ class Trainer:
         self.device = device
         self.device_type = 'cuda' if device.startswith('cuda') else 'cpu'
         self.logpath=logpath
+
     
     def train(self,max_steps,warmup_steps,max_lr,min_lr):
         history={
@@ -106,7 +107,7 @@ class Trainer:
 
         evaluation =self.evaluate_text_metrics(
             max_samples=60,
-            gen_len=128,
+            gen_len=256,
             do_sample=False,    
             top_k=None,
             temperature=0.2,
@@ -175,7 +176,7 @@ class Trainer:
         avg_d2 = sum(distinct2_scores) / len(distinct2_scores)
 
 
-        bleu = corpus_bleu(hyps, [refs]).score
+        bleu = corpus_bleu(hyps, refs).score
         self_bleu=compute_self_bleu(hyps)
         rouge_scores = []
         for h, r in zip(hyps, refs):
