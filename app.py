@@ -75,15 +75,15 @@ with gr.Blocks(title="Story Generator") as demo:
 
     gr.Markdown("# ✨ Story Generator ✨")
     gr.Markdown(
-        "Ketik prompt atau cerita awal di bawah ini. "
-        "Tekan **Generate** untuk melanjutkan cerita. "
-        "Anda dapat mengedit hasil cerita dan generate lagi untuk melanjutkan."
+        "Write a story below. "
+        "Press generate and the model will generate the continuation"
+        "You may edit the story after the model finishes"
     )
 
     story_box = gr.Textbox(
         label="Story / Prompt",
         lines=15,
-        placeholder="Tulis prompt atau awal cerita di sini...",
+        placeholder="Write the story here",
     )
 
     generate_btn = gr.Button("Generate Story", variant="primary")
