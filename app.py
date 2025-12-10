@@ -76,8 +76,8 @@ with gr.Blocks(title="Story Generator") as demo:
     gr.Markdown("# ✨ Story Generator ✨")
     gr.Markdown(
         "Write a story below. "
-        "Press generate and the model will generate the continuation"
-        "You may edit the story after the model finishes"
+        "Press generate and the model will generate the continuation."
+        "You may edit the story after the model finishes."
     )
 
     story_box = gr.Textbox(
