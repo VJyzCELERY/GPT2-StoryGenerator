@@ -1,0 +1,8 @@
+gradio==5.5.0
+numpy
+torch
+sacrebleu
+rogue-score
+tiktoken
+beautifulsoup4
+pandas

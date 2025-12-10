@@ -1,65 +1,20 @@
-import numpy as np
 import torch
 import torch.nn.functional as F
-import hnswlib
-from sentence_transformers import SentenceTransformer
-import tiktoken
-from dataclasses import dataclass
-from src.model import GPT
 
 def concat(prev, new):
     if prev and prev[-1].isalnum() and new and new[0].isalnum():
         return prev + " " + new
     return prev + new
 
-class HNSWRetriever:
-    def __init__(self, dim=768, space='cosine'):
-        self.index = hnswlib.Index(space=space, dim=dim)
-        self.initialized = False
-        self.data = []
-    
-    def build(self, embeddings, texts, ef=200, M=48):
-        """
-        embeddings: numpy array (N, dim)
-        texts: list of strings (N)
-        """
-        num_elements = embeddings.shape[0]
-        self.data = texts
-
-        self.index.init_index(max_elements=num_elements, ef_construction=ef, M=M)
-        self.index.add_items(embeddings)
-        self.index.set_ef(ef)
-
-        self.initialized = True
-        print("HNSW index built:", num_elements, "items")
-
-    def search(self, query_emb, k=3):
-        if not self.initialized:
-            return []
-
-        labels, distances = self.index.knn_query(query_emb, k=k)
-        results = [self.data[idx] for idx in labels[0]]
-        return results
-
 class GPTInfer:
-    def __init__(self, model, token_encoder, device, retriever=None, embed_model=None):
+    def __init__(self, model, token_encoder, device):
         self.model = model
         self.token_encoder = token_encoder
         self.device = device
-        self.retriever = retriever     
-        self.embed_model = embed_model 
         self.device_type = 'cuda' if device.startswith('cuda') else 'cpu'
-    def get_token_length(self,text):
-        return len(self.token_encoder.encode(text,allowed_special={"<|endoftext|>"}))
-    def retrieve_context(self, query, k=3):
-        if self.retriever is None or self.embed_model is None:
-            return ""
-
-        q_emb = self.embed_model.encode([query]) 
-
-        retrieved_texts = self.retriever.search(q_emb, k=k)
-
-        return "\n\n".join(retrieved_texts)
+    
+    def get_token_length(self, text):
+        return len(self.token_encoder.encode(text, allowed_special={"<|endoftext|>"}))
     
     def apply_frequency_penalty_and_blocking(
         self,
@@ -99,6 +54,7 @@ class GPTInfer:
                             logits[0, banned_token] = -1e9
 
         return logits
+    
     def sample_next_token(
         self,
         logits,                 
@@ -153,7 +109,8 @@ class GPTInfer:
         next_tok = sorted_idx.gather(-1, next_index_in_sorted)
 
         return int(next_tok.item())
-    def generate_sequences(
+    
+    def generate(
         self,
         prompt,
         max_new_tokens=50,
@@ -165,33 +122,23 @@ class GPTInfer:
         repetition_penalty=1.2,
         frequency_penalty=0.5,
         no_repeat_ngram_size=3,
-        end_prob=0.1,
-        rag_k=3,
-        rag_delimiter="\n\n---\n\n",
+        context_window=None,
+        stream=True,
     ):
         self.model.eval()
 
-        rag_context = ""
-        if self.retriever is not None and self.embed_model is not None and rag_k > 0:
-            q_emb = self.embed_model.encode([prompt])
-            retrieved = self.retriever.search(q_emb, k=rag_k)
-
-            seen = set()
-            dedup = []
-            for r in retrieved:
-                if r not in seen:
-                    seen.add(r)
-                    dedup.append(r)
-            if dedup:
-                rag_context = rag_delimiter.join(dedup)
-
-        model_prompt = f"{rag_context}{rag_delimiter if rag_context else ''}{prompt}" if rag_context else prompt
-
-        tokens = self.token_encoder.encode(model_prompt)
+        tokens = self.token_encoder.encode(prompt)
+        if context_window is not None and len(tokens) > context_window:
+            tokens = tokens[-context_window:]
+        
         tokens = torch.tensor(tokens, dtype=torch.long).unsqueeze(0).to(self.device)
         gen_tokens = tokens.clone()
-
-        sample_rng = torch.Generator(device=self.device).manual_seed(seed)
+        
+        if seed is not None:
+            sample_rng = torch.Generator(device=self.device).manual_seed(seed)
+        else:
+            sample_rng = torch.Generator(device=self.device)
+        
         eos_id = self.token_encoder.encode("<|endoftext|>", allowed_special={"<|endoftext|>"})[0]
         context_len = self.model.config.context_length
         new_tokens_generated = 0
@@ -234,9 +181,12 @@ class GPTInfer:
             next_tok_tensor = torch.tensor([[next_token_id]], dtype=torch.long).to(self.device)
             gen_tokens = torch.cat([gen_tokens, next_tok_tensor], dim=1)
             new_tokens_generated += 1
-            yield self.token_encoder.decode([next_token_id], errors='ignore')
-
-        yield self.token_encoder.decode(gen_tokens[0, :].tolist(), errors='ignore')
+            
+            if stream:
+                yield self.token_encoder.decode([next_token_id], errors='ignore')
+        
+        if not stream:
+            yield self.token_encoder.decode(gen_tokens[0, :].tolist(), errors='ignore')
     
     def print_stream(
         self,
@@ -250,13 +200,12 @@ class GPTInfer:
         repetition_penalty=1.2,
         frequency_penalty=0.6,
         no_repeat_ngram_size=3,
-        end_prob=0.1,
-        rag_k=3,
+        context_window=512,
     ):
         text = prompt
         last_piece = ""
         print(prompt, end="", flush=True)
-        for piece in self.generate_sequences(
+        for piece in self.generate(
             prompt,
             max_new_tokens=max_new_tokens,
             seed=seed,
@@ -267,8 +216,7 @@ class GPTInfer:
             repetition_penalty=repetition_penalty,
             frequency_penalty=frequency_penalty,
             no_repeat_ngram_size=no_repeat_ngram_size,
-            end_prob=end_prob,
-            rag_k=rag_k,
+            context_window=context_window,
         ):
             if piece == last_piece:
                 continue
@@ -276,5 +224,3 @@ class GPTInfer:
             text = concat(text, piece)
             print(piece, end="", flush=True)
         return text
-        
-
