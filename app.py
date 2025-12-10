@@ -5,6 +5,7 @@ from src.inference import GPTInfer
 import tiktoken
 import torch
 import os
+from huggingface_hub import hf_hub_download
 
 os.environ['GRADIO_DEFAULT_CONCURRENCY_LIMIT']="1"
 
@@ -14,7 +15,10 @@ if torch.cuda.is_available():
 elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
     device = 'mps'   
 print(f'using device: {device}')
-model_path = './model_02399.pt'
+model_path = hf_hub_download(
+    repo_id="VJyzCELERY/GPT2-GutenbergStoryGenerator",  
+    filename="GPT2-GutenbergStoryGenerator.pt"                 
+)
 checkpoint = torch.load(model_path, weights_only=False)
 model = GPT(config=checkpoint['config'])
 model.load_state_dict(checkpoint['model'])

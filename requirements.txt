@@ -6,3 +6,5 @@ rogue-score
 tiktoken
 beautifulsoup4
 pandas
+huggingface_hub
+huggingface
