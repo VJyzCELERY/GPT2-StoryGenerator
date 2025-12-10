@@ -19,7 +19,7 @@ model_path = hf_hub_download(
     repo_id="VJyzCELERY/GPT2-GutenbergStoryGenerator",  
     filename="GPT2-GutenbergStoryGenerator.pt"                 
 )
-checkpoint = torch.load(model_path, weights_only=False)
+checkpoint = torch.load(model_path, weights_only=False,map_location=device)
 model = GPT(config=checkpoint['config'])
 model.load_state_dict(checkpoint['model'])
 model = model.to(device)
